@@ -1,0 +1,10 @@
+{
+  "repo_name": "Zoekt",
+  "paths": [
+    "D:\\Code\\zoekt\\"
+  ],
+  "ignore_dirs": ".git,.hg,.svn,node_modules",
+  "file_extensions": "go",
+  "cpu_profile": "",
+  "Parallelism": 20
+}
