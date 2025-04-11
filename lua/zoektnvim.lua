@@ -34,6 +34,12 @@ actions.search_code = function(query)
     return
   end
 
+  -- process '\\' in the query and other special characters
+  -- Escape backslashes
+  query = query:gsub("\\", "\\\\")
+  -- process '|' in the query
+  query = query:gsub("|", "\\|")
+
   -- Show searching indicator
   local notify_id = vim.notify("Searching for: " .. query, vim.log.levels.INFO)
 
