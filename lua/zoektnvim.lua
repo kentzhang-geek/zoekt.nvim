@@ -24,6 +24,13 @@ actions.set_query_prefix = function(prefix)
   vim.notify("Search query prefix set to: '" .. prefix .. "'", vim.log.levels.INFO)
 end
 
+-- Function to toggle debug mode
+actions.toggle_debug_mode = function()
+  config.DebugMode = not config.DebugMode
+  local status = config.DebugMode and "enabled" or "disabled"
+  vim.notify("Zoekt debug mode " .. status, vim.log.levels.INFO)
+end
+
 -- Function to display configuration settings
 actions.display_config = function()
   local config_items = {}
@@ -58,10 +65,6 @@ actions.search_code = function(query)
     full_query = config.QueryPrefix .. " " .. query
   end
 
-  -- process '\\' in the query and other special characters
-  -- Escape backslashes
-  full_query = full_query:gsub("\\", "\\\\")
-
   -- Show searching indicator
   local notify_id = vim.notify("Searching for: " .. full_query, vim.log.levels.INFO)
 
@@ -71,11 +74,7 @@ actions.search_code = function(query)
 
   -- Prepare POST request data
   local post_data = {
-    Q = full_query,
-    Opts = {
-      ShardMaxMatchCount = config.ShardMaxMatchCount,
-      MaxWallTime = config.MaxWallTime,
-    }
+    Q = full_query
   }
 
   -- Perform API request
@@ -85,6 +84,7 @@ actions.search_code = function(query)
     headers = {
       ["Content-Type"] = "application/json",
     },
+    timeout = config.curl_timeout,
     callback = function(response)
       -- Schedule to run on the main Neovim thread
       vim.schedule(function()
@@ -96,6 +96,30 @@ actions.search_code = function(query)
         if response.status ~= 200 then
           vim.notify("Error: Could not connect to Zoekt server. Status: " .. 
             (response.status or "unknown"), vim.log.levels.ERROR)
+          return
+        end
+
+        -- Debug mode: print the response body
+        if config.DebugMode then
+          -- popup a buffer containing the response and the query
+          local buf = vim.api.nvim_create_buf(false, true)
+          vim.api.nvim_buf_set_lines(buf, 0, -1, false, { response.body, json.encode(post_data) })        
+          local win = vim.api.nvim_open_win(buf, true, {
+            relative = 'editor',
+            width = math.floor(vim.o.columns * 0.8),
+            height = math.floor(vim.o.lines * 0.8),
+            col = math.floor((vim.o.columns - vim.o.columns * 0.8) / 2),
+            row = math.floor((vim.o.lines - vim.o.lines * 0.8) / 2),
+            border = 'rounded',
+            style = 'minimal'
+          })
+          vim.api.nvim_win_set_option(win, 'winhl', 'Normal:Normal')
+          vim.api.nvim_win_set_option(win, 'wrap', true)
+          vim.api.nvim_win_set_option(win, 'scrolloff', 0)
+          vim.api.nvim_win_set_option(win, 'foldmethod', 'manual')
+          vim.api.nvim_win_set_option(win, 'foldenable', false)
+          vim.api.nvim_win_set_option(win, 'cursorline', true)
+          vim.api.nvim_win_set_option(win, 'cursorcolumn', true)
           return
         end
 
@@ -188,6 +212,10 @@ function M.setup(opts)
   vim.api.nvim_create_user_command('ZoektSetQueryPrefix', function(cmd_opts)
     actions.set_query_prefix(cmd_opts.args)
   end, { nargs = "?", desc = "Set prefix for all Zoekt search queries" })
+  
+  vim.api.nvim_create_user_command('ZoektDebug', function()
+    actions.toggle_debug_mode()
+  end, { desc = "Toggle debug mode to print server responses" })
 
 end
 
