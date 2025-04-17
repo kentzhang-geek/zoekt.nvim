@@ -6,6 +6,24 @@ local base64 = require'base64'
 local M = {}
 local actions = {}
 
+-- Function to set search query prefix
+actions.set_query_prefix = function(prefix)
+  -- If no prefix provided, ask the user
+  if not prefix or prefix == "" then
+    vim.ui.input({ prompt = "Set search query prefix: ", default = config.QueryPrefix }, function(input)
+      if input then -- input can be empty to clear the prefix
+        config.QueryPrefix = input
+        vim.notify("Search query prefix set to: '" .. input .. "'", vim.log.levels.INFO)
+      end
+    end)
+    return
+  end
+  
+  -- Set the prefix directly if provided
+  config.QueryPrefix = prefix
+  vim.notify("Search query prefix set to: '" .. prefix .. "'", vim.log.levels.INFO)
+end
+
 -- Function to display configuration settings
 actions.display_config = function()
   local config_items = {}
@@ -34,14 +52,18 @@ actions.search_code = function(query)
     return
   end
 
+  -- Apply prefix to query if set
+  local full_query = query
+  if config.QueryPrefix and config.QueryPrefix ~= "" then
+    full_query = config.QueryPrefix .. " " .. query
+  end
+
   -- process '\\' in the query and other special characters
   -- Escape backslashes
-  query = query:gsub("\\", "\\\\")
-  -- process '|' in the query
-  query = query:gsub("|", "\\|")
+  full_query = full_query:gsub("\\", "\\\\")
 
   -- Show searching indicator
-  local notify_id = vim.notify("Searching for: " .. query, vim.log.levels.INFO)
+  local notify_id = vim.notify("Searching for: " .. full_query, vim.log.levels.INFO)
 
   -- Get zoekt server URL from config
   local zoekt_url = config.server_url or "http://localhost:6070"
@@ -49,7 +71,7 @@ actions.search_code = function(query)
 
   -- Prepare POST request data
   local post_data = {
-    Q = query,
+    Q = full_query,
     Opts = {
       ShardMaxMatchCount = config.ShardMaxMatchCount,
       MaxWallTime = config.MaxWallTime,
@@ -123,7 +145,7 @@ actions.search_code = function(query)
           
           -- Use vim.ui.select to display and select from search results
           vim.ui.select(select_items, {
-            prompt = "Search results for: " .. query .. " (" .. match_count .. " matches in " .. #results.Result.Files .. " files)",
+            prompt = "Search results for: " .. full_query .. " (" .. match_count .. " matches in " .. #results.Result.Files .. " files)",
             format_item = function(item)
               -- Format as filename:linenum->content
               return item.filename .. ":" .. item.line_number .. "->" .. item.content
@@ -139,7 +161,7 @@ actions.search_code = function(query)
             end
           end)
         else
-          vim.notify("No results found for: " .. query, vim.log.levels.INFO)
+          vim.notify("No results found for: " .. full_query, vim.log.levels.INFO)
           return
         end
       end)
@@ -162,6 +184,11 @@ function M.setup(opts)
   vim.api.nvim_create_user_command('ZoektSearch', function(cmd_opts)
     actions.search_code(cmd_opts.args)
   end, { nargs = "?", desc = "Search code using Zoekt" })
+
+  vim.api.nvim_create_user_command('ZoektSetQueryPrefix', function(cmd_opts)
+    actions.set_query_prefix(cmd_opts.args)
+  end, { nargs = "?", desc = "Set prefix for all Zoekt search queries" })
+
 end
 
 return setmetatable(M, {
